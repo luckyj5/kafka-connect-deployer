@@ -195,6 +195,18 @@ restart_kafka_connect_cluster() {
     start_kafka_connect_cluster
 }
 
+create_kafka_topics() {
+    topics="$1"
+
+    #zk_connect=`get_zookeeper_connect_setting`
+    for ip in `cat ${LAB} | grep -v \# | awk -F\| '{print $1}'`
+    do
+        #bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic offset.storage.topic
+        print_msg "create kafka topic ${topics}"
+        execute_remote_cmd "${ip}" "./$KAFKA_PACKAGE_DIR/bin/kafka-topics.sh --create zookeeper localhost:2181 --replication-factor 1 --partitions 300 --topic ${topics}"
+        break
+    done
+}
 
 usage() {
 cat << EOF
@@ -208,6 +220,7 @@ Usage: $0 options
     --stop
     --restart
     --check <fix|nofix>
+    --create-topic
 EOF
 exit 1
 }
@@ -248,6 +261,9 @@ for arg in "$@"; do
         "--download")
             set -- "$@" "-n"
             ;;
+        "--create-topic")
+            set -- "$@" "-q"
+            ;;    
         *)
             set -- "$@" "$arg"
     esac
@@ -257,8 +273,9 @@ cmd=
 ips=
 fix=
 topic=
+create-topic
 
-while getopts "hsropdlnc:i:" OPTION
+while getopts "hsropdlncq:i:" OPTION
 do
     case $OPTION in
         h)
@@ -296,6 +313,9 @@ do
             cmd="check"
             fix="$OPTARG"
             ;;
+         q)
+            cmd="create-topic"
+            topics="$OPTARG"   
         *)
             usage
             ;;
@@ -322,6 +342,8 @@ elif [[ "$cmd" == "restart" ]]; then
     restart_kafka_connect_cluster
 elif [[ "$cmd" == "check" ]]; then
     check_kafka_connect_cluster "${fix}"
+elif [[ "$cmd" == "create-topic" ]]; then
+    create_kafka_topics "${topics}"    
 else
     usage
 fi
