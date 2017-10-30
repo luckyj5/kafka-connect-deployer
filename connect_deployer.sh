@@ -3,21 +3,23 @@
 # set -x
 
 # Configuration file
-LAB=kafka.lab
-LAB2=connect.lab
+KAFKALAB=kafka.lab
+CONNECTLAB=connect.lab
 CRED=cred.lab
 
 
 USERNAME=
 CREDFILE=
 
+
 KAFKA_HEAP_OPTS="-Xmx6G -Xms6G"
 KAFKA_VERSION=0.11.0.1
-KAFKA_PACKAGE_DIR=kafka_2.11-${KAFKA_VERSION}
+KAFKA_PACKAGE_DIR=/home/ec2-user/kafka-connect-splunk
+KAKFA_BUILD_DIR=/tmp/kafka-connect-splunk-build/
 KAFKA_INSTALL_PACKAGE=kafka_2.11-${KAFKA_VERSION}.tgz
 KAFKA_PACKAGE_URL=http://mirrors.ibiblio.org/apache/kafka/${KAFKA_VERSION}/${KAFKA_INSTALL_PACKAGE}
-LOGDIR=/kafka-logs
-DATADIR=/zookeeper
+curdir=`pwd`
+#echo ${curdir}
 
 execute_remote_cmd() {
     ip="$1"
@@ -53,14 +55,6 @@ read_user_cred() {
     # print_msg "Use username=$USERNAME, CREDFILE=$CREDFILE to do deployment"
 }
 
-download_kafka_package() {
-    if [ ! -e $KAFKA_INSTALL_PACKAGE ]; then
-        wget ${KAFKA_PACKAGE_URL}
-    else
-        echo "$KAFKA_INSTALL_PACKAGE is already downloaded"
-    fi
-}
-
 #get list of bootstrap servers
 get_kafka_server_list() {
     i=0
@@ -78,7 +72,7 @@ get_kafka_server_list() {
         else
             server_list=${server_list},"${ip}:9092"
         fi
-    done < ${LAB}
+    done < ${KAFKALAB}
     echo "${server_list}"
 }
 
@@ -91,41 +85,55 @@ configure_connect_settings() {
     # value.converter.schemas.enable=false
 
     print_msg ${server_list}
-    sed -i "" "s#bootstrap.servers=.*#bootstrap.servers=${k_server_list}#g" "${KAFKA_PACKAGE_DIR}/config/connect-distributed.properties"
-    sed -i "" "s#group.id=.*#group.id=connect-cluster#g" "${KAFKA_PACKAGE_DIR}/config/connect-distributed.properties"
-    sed -i "" "s#key.converter.schemas.enable=true#key.converter.schemas.enable=false#g" "${KAFKA_PACKAGE_DIR}/config/connect-distributed.properties"
-    sed -i "" "s#value.converter.schemas.enable=true#value.converter.schemas.enable=false#g" "${KAFKA_PACKAGE_DIR}/config/connect-distributed.properties"
+    sed -i "" "s#bootstrap.servers=.*#bootstrap.servers=${k_server_list}#g" "${curdir}/kafka-connect-splunk/kafka-connect-splunk/config/connect-distributed.properties"
+    sed -i "" "s#rest.advertised.host.name=.*#\#rest.advertised.host.name=#g" "${curdir}/kafka-connect-splunk/kafka-connect-splunk/config/connect-distributed.properties"
+    sed -i "" "s#rest.host.name=.*#\#rest.host.name=#g" "${curdir}/kafka-connect-splunk/kafka-connect-splunk/config/connect-distributed.properties"
+    sed -i "" "s#status.storage.partitions=.*#status.storage.partitions=5#g" "${curdir}/kafka-connect-splunk/kafka-connect-splunk/config/connect-distributed.properties"
+    sed -i "" "s#offset.storage.partitions=.*#offset.storage.partitions=25#g" "${curdir}/kafka-connect-splunk/kafka-connect-splunk/config/connect-distributed.properties"
+  #  sed -i "" "s#key.converter.schemas.enable=true#key.converter.schemas.enable=false#g" "${KAFKA_PACKAGE_DIR}/config/connect-distributed.properties"
+  #  sed -i "" "s#value.converter.schemas.enable=true#value.converter.schemas.enable=false#g" "${KAFKA_PACKAGE_DIR}/config/connect-distributed.properties"
     
 }
 
+build_kafka_package() {
+    
+    git clone https://github.com/splunk/kafka-connect-splunk.git
+    cd kafka-connect-splunk
+    git checkout develop
+    git pull
+    bash build.sh
+
+}
 
 deploy_kafka_package() {
-    rm -rf $KAFKA_PACKAGE_DIR
-    tar xzf $KAFKA_INSTALL_PACKAGE
+    #curdir = 'pwd'/kafka-connect-splunk
+    
+    cd ${curdir}/kafka-connect-splunk
+    tar xzf ${curdir}/kafka-connect-splunk/kafka-connect-splunk.tar.gz
+    cd ${curdir}
+
     k_server_list=`get_kafka_server_list`
 
     configure_connect_settings "${k_server_list}"
  
-     id=0
-     for ip in `cat ${LAB2} | grep -v \#`
+     #id=0
+     for ip in `cat ${CONNECTLAB} | grep -v \#`
      do
          if [ "${ip}" == "" ]; then
              continue
          fi
 
          pub_ip=`echo $ip | awk -F\| '{print $1}'`
-         private_ip=`echo $ip | awk -F\| '{print $2}'`
 
-         configure_connect_settings "${id}" "${private_ip}" "${pub_ip}" "${k_server_list}"
-         ((id++))
          print_msg "Deploy kafka-connect package to ${pub_ip}"
-         rsync -raz -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=quiet -i $CREDFILE" --exclude=macos --delete $KAFKA_PACKAGE_DIR $USERNAME@$pub_ip:~/
+         #echo rsync -raz -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=quiet -i $CREDFILE" --exclude=macos ${curdir}/kafka-connect-splunk/ $USERNAME@$pub_ip:~/kafka-connect-splunk
+         rsync -raz -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=quiet -i $CREDFILE" --exclude=macos ${curdir}/kafka-connect-splunk/kafka-connect-splunk $USERNAME@$pub_ip:~/
         
      done
 }
 
 check_kafka_connect_cluster() {
-    for ip in `cat ${LAB2} | grep -v \# | awk -F\| '{print $1}'`
+    for ip in `cat ${CONNECTLAB} | grep -v \# | awk -F\| '{print $1}'`
     do
         if [ "${ip}" == "" ]; then
             continue
@@ -138,9 +146,6 @@ check_kafka_connect_cluster() {
             print_msg "kafka-connect is up and running on ${ip}"
         else
             print_msg "Kafka-connect is not running on ${ip}"
-            if [[ "$1" == "fix" ]]; then
-                start_server "zookeeper" "cd $KAFKA_PACKAGE_DIR; export KAFKA_HEAP_OPTS=\"$KAFKA_HEAP_OPTS\"; nohup ./bin/zookeeper-server-start.sh config/zookeeper.properties > zookeeper_start.log 2>&1 &" "${ip}"
-            fi
         fi
 
     done
@@ -152,7 +157,7 @@ start_server() {
     # $3 is the ip
 
     if [[ "$3" == "" ]]; then
-        for ip in `cat ${LAB2} | grep -v \# | awk -F\| '{print $1}'`
+        for ip in `cat ${CONNECTLAB} | grep -v \# | awk -F\| '{print $1}'`
         do
             if [ "${ip}" == "" ]; then
                 continue
@@ -174,7 +179,7 @@ start_kafka_connect_cluster() {
 
 stop_kafka_connect_cluster() {
     if [[ "$1" == "" ]]; then
-        for ip in `cat ${LAB2} | grep -v \# | awk -F\| '{print $1}'`
+        for ip in `cat ${CONNECTLAB} | grep -v \# | awk -F\| '{print $1}'`
         do
             if [ "${ip}" == "" ]; then
                 continue
@@ -195,18 +200,25 @@ restart_kafka_connect_cluster() {
     start_kafka_connect_cluster
 }
 
-create_kafka_topics() {
-    topics="$1"
 
-    #zk_connect=`get_zookeeper_connect_setting`
-    for ip in `cat ${LAB} | grep -v \# | awk -F\| '{print $1}'`
-    do
-        #bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic offset.storage.topic
-        print_msg "create kafka topic ${topics}"
-        execute_remote_cmd "${ip}" "./$KAFKA_PACKAGE_DIR/bin/kafka-topics.sh --create zookeeper localhost:2181 --replication-factor 1 --partitions 300 --topic ${topics}"
-        break
-    done
+clean_kafka_connect_cluster() {
+    if [[ "$1" == "" ]]; then
+        for ip in `cat ${CONNECTLAB} | grep -v \# | awk -F\| '{print $1}'`
+        do
+            if [ "${ip}" == "" ]; then
+                continue
+            fi
+
+            print_msg "Cleaning kafka connect on ${ip}"
+            execute_remote_cmd "${ip}" "rm -rf /home/ec2-user/kafka-connect-splunk/*"
+        done
+    else
+        print_msg "Kafka Connect doesn't exist on $1"
+    fi
+
+
 }
+
 
 usage() {
 cat << EOF
@@ -214,13 +226,13 @@ Usage: $0 options
 
     OPTIONS:
     --help    Show this message
-    --download # Download kafka-connect installation package
+    --build # Build kafka-connect package
     --deploy  # Configure kafka connect package
     --start 
     --stop
     --restart
-    --check <fix|nofix>
-    --create-topic
+    --clean
+    --check
 EOF
 exit 1
 }
@@ -246,7 +258,7 @@ for arg in "$@"; do
         "--check")
             set -- "$@" "-c"
             ;;
-        "--clear")
+        "--create-topic")
             set -- "$@" "-l"
             ;;
         "--topics")
@@ -255,15 +267,12 @@ for arg in "$@"; do
         "--describe-topic")
             set -- "$@" "-i"
             ;;
-        "--clear-topics")
-            set -- "$@" "-t"
-            ;;
-        "--download")
+        "--clean")
+           set -- "$@" "-t"
+           ;;
+        "--build")
             set -- "$@" "-n"
-            ;;
-        "--create-topic")
-            set -- "$@" "-q"
-            ;;    
+            ;; 
         *)
             set -- "$@" "$arg"
     esac
@@ -271,18 +280,17 @@ done
 
 cmd=
 ips=
-fix=
 topic=
-create-topic
+#topics1=
 
-while getopts "hsropdlncq:i:" OPTION
+while getopts "hsropdlnci:" OPTION
 do
     case $OPTION in
         h)
             usage
             ;;
         n)
-            cmd="download"
+            cmd="build"
             ;;
         d)
             cmd="deploy"
@@ -296,9 +304,10 @@ do
         r)
             cmd="restart"
             ;;
-        l)
-            cmd="clear"
-            ;;
+#        l)
+#           cmd="create-topic"
+#          topics1="$OPTARG"
+#            ;;
         o)
             cmd="topics"
             ;;
@@ -307,15 +316,11 @@ do
             topic="$OPTARG"
             ;;
         t)
-            cmd="clear_topics"
+            cmd="clean"
             ;;
         c)
             cmd="check"
-            fix="$OPTARG"
-            ;;
-         q)
-            cmd="create-topic"
-            topics="$OPTARG"   
+            ;; 
         *)
             usage
             ;;
@@ -330,8 +335,8 @@ if [ "${USERNAME}" == "" ] || [ "${CREDFILE}" == ""  ]; then
     exit 1
 fi
 
-if [[ "$cmd" == "download" ]]; then
-    download_kafka_package   
+if [[ "$cmd" == "build" ]]; then
+    build_kafka_package   
 elif [[ "$cmd" == "deploy" ]]; then
     deploy_kafka_package
 elif [[ "$cmd" == "start" ]]; then
@@ -341,9 +346,9 @@ elif [[ "$cmd" == "stop" ]]; then
 elif [[ "$cmd" == "restart" ]]; then
     restart_kafka_connect_cluster
 elif [[ "$cmd" == "check" ]]; then
-    check_kafka_connect_cluster "${fix}"
-elif [[ "$cmd" == "create-topic" ]]; then
-    create_kafka_topics "${topics}"    
+    check_kafka_connect_cluster
+elif [[ "$cmd" == "clean" ]]; then
+    clean_kafka_connect_cluster
 else
     usage
 fi

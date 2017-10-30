@@ -1,5 +1,10 @@
 # Format, the first line is "user", and the second line is full path of ssh private key
 
 #root
+ec2-user
+#Kafka+Zookeeper cluster
+#/Users/shujain/workspace/kafka/perf-testing/kchen.pem
 
+#kafka-connect cluster
+/Users/shujain/workspace/kafka/perf-testing/kafka_testing.pem
 #/Users/ghost/.ssh/id_rsa
