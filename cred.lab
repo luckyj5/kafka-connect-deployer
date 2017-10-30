@@ -1,0 +1,5 @@
+# Format, the first line is "user", and the second line is full path of ssh private key
+
+#root
+
+#/Users/ghost/.ssh/id_rsa
