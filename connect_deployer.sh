@@ -15,6 +15,7 @@ CREDFILE=
 KAFKA_HEAP_OPTS="-Xmx6G -Xms6G"
 KAFKA_VERSION=0.11.0.1
 KAFKA_PACKAGE_DIR=/home/ec2-user/kafka-connect-splunk
+PROC_MONITOR=/home/ec2-user/proc_monitor
 KAKFA_BUILD_DIR=/tmp/kafka-connect-splunk-build/
 KAFKA_INSTALL_PACKAGE=kafka_2.11-${KAFKA_VERSION}.tgz
 KAFKA_PACKAGE_URL=http://mirrors.ibiblio.org/apache/kafka/${KAFKA_VERSION}/${KAFKA_INSTALL_PACKAGE}
@@ -116,7 +117,6 @@ deploy_kafka_package() {
 
     configure_connect_settings "${k_server_list}"
  
-     #id=0
      for ip in `cat ${CONNECTLAB} | grep -v \#`
      do
          if [ "${ip}" == "" ]; then
@@ -126,9 +126,12 @@ deploy_kafka_package() {
          pub_ip=`echo $ip | awk -F\| '{print $1}'`
 
          print_msg "Deploy kafka-connect package to ${pub_ip}"
-         #echo rsync -raz -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=quiet -i $CREDFILE" --exclude=macos ${curdir}/kafka-connect-splunk/ $USERNAME@$pub_ip:~/kafka-connect-splunk
+         
          rsync -raz -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=quiet -i $CREDFILE" --exclude=macos ${curdir}/kafka-connect-splunk/kafka-connect-splunk $USERNAME@$pub_ip:~/
-        
+         execute_remote_cmd "${pub_ip}" "export KAFKA_HEAP_OPTS='-Xmx6G -Xms2G'"
+         execute_remote_cmd "${pub_ip}" "sudo wget -q --no-check-certificate --no-cookies --header \"Cookie: oraclelicense=accept-securebackup-cookie\" http://download.oracle.com/otn-pub/java/jdk/8u141-b15/336fa29ff2bb4ef291e347e091f7f4a7/jdk-8u141-linux-x64.rpm"
+         execute_remote_cmd "${pub_ip}" "sudo yum install -y jdk-8u141-linux-x64.rpm"
+
      done
 }
 
@@ -175,6 +178,7 @@ start_server() {
 start_kafka_connect_cluster() {
     
     start_server "kafka-connect" "cd $KAFKA_PACKAGE_DIR; export KAFKA_HEAP_OPTS=\"$KAFKA_HEAP_OPTS\"; nohup ./bin/connect-distributed.sh config/connect-distributed.properties > kafka_connect_start.log 2>&1 &" "$1"
+    start_server "proc_monitor" "screen -S proc_monitor -m -d python $PROC_MONITOR/proc_monitor.py &" "$1"
 }
 
 stop_kafka_connect_cluster() {
@@ -187,11 +191,14 @@ stop_kafka_connect_cluster() {
 
             print_msg "Stop kafka connect on ${ip}"
             execute_remote_cmd "${ip}" "ps ax | grep -i 'connect' | grep -v grep | awk '{print \$1}' | xargs kill -9 > /dev/null 2>&1"
+            print_msg "Stop proc_monitor on ${ip}"
+            execute_remote_cmd "${ip}" "ps ax | grep -i 'monitor' | grep -v grep | xargs kill -9 > /dev/null 2>&1"
         done
     else
-        print_msg "Stop kafka on $1"
+        print_msg "Stop kafka connect on $1"
         execute_remote_cmd "$1" "ps ax | grep -i 'connect' | grep -v grep | awk '{print \$1}' | xargs kill -9 > /dev/null 2>&1"
-        execute_remote_cmd "$1" "ps ax | grep -i 'connect' | grep -v grep | awk '{print \$1}' | xargs kill -9 > /dev/null 2>&1"
+        print_msg "Stop proc_monitor on $1"
+        execute_remote_cmd "$1" "ps ax | grep -i 'monitor' | grep -v grep | awk '{print \$1}' | xargs kill -9 > /dev/null 2>&1"
     fi
 }
 
