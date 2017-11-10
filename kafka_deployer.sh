@@ -114,7 +114,7 @@ configure_zookeeper_settings() {
 configure_kafka_server_settings() {
     # kafka server
     # broker.id=0
-    # listeners=PLAINTEXT://:9092
+    # listeners=PLAINTEXT:0.0.0.0//:9092
     # advertised.listeners=PLAINTEXT://<public-ip>:9092
     # log.dirs=/kafka-logs
     # num.partitions=3
@@ -131,15 +131,13 @@ configure_kafka_server_settings() {
     sed -i "" "s#broker.id=.*#broker.id=${id}#g" "${KAFKA_PACKAGE_DIR}/config/server.properties"
     sed -i "" "s/#host.name=.*/host.name=${ip}/g" "${KAFKA_PACKAGE_DIR}/config/server.properties"
     sed -i "" "s/host.name=.*/host.name=${ip}/g" "${KAFKA_PACKAGE_DIR}/config/server.properties"
-    sed -i "" "s/^#listeners/listeners/g" "${KAFKA_PACKAGE_DIR}/config/server.properties"
-    # sed -i "" "s@^#advertised.listeners=PLAINTEXT://your.host.name:9092@advertised.listeners=PLAINTEXT://${ip}:9092@g" "${KAFKA_PACKAGE_DIR}/config/server.properties"
+    sed -E -i "" "s@^#?advertised.listeners=PLAINTEXT://.+:9092@advertised.listeners=PLAINTEXT://${pub_ip}:9092@g" "${KAFKA_PACKAGE_DIR}/config/server.properties"
 
     sed -i "" "s#log.dirs=.*#log.dirs=${LOGDIR}#g" "${KAFKA_PACKAGE_DIR}/config/server.properties"
     sed -i "" "s#zookeeper.connect=.*#zookeeper.connect=${zk_connect}#g" "${KAFKA_PACKAGE_DIR}/config/server.properties"
     sed -i "" "s#num.partitions=.*#num.partitions=3#g" "${KAFKA_PACKAGE_DIR}/config/server.properties"
     if [  "${id}" == "0" ]; then
-        sed -i "" '#listeners = PLAINTEXT://your.host.name:9092#a listeners=PLAINTEXT://:9092' "${KAFKA_PACKAGE_DIR}/config/server.properties"
-
+        sed -E -i "" 's@^#?listeners=PLAINTEXT://.*:9092@listeners=PLAINTEXT://0.0.0.0:9092@g' "${KAFKA_PACKAGE_DIR}/config/server.properties"
         echo "default.replication.factor=1" >> "${KAFKA_PACKAGE_DIR}/config/server.properties"
         echo "delete.topic.enable=true" >> "${KAFKA_PACKAGE_DIR}/config/server.properties"
         echo "auto.create.topics.enable=true" >> "${KAFKA_PACKAGE_DIR}/config/server.properties"
@@ -299,7 +297,6 @@ describe_kafka_topic() {
     done
 }
 
-
 clear_kafka_topics() {
     zk_connect=`get_zookeeper_connect_setting`
     for ip in `cat ${LAB} | grep -v \# | awk -F\| '{print $1}'`
@@ -452,7 +449,6 @@ elif [[ "$cmd" == "describe_topic" ]]; then
     describe_kafka_topic "${topic}"
 elif [[ "$cmd" == "check" ]]; then
     check_kafka_cluster "${fix}"
-        #statements    
 else
     usage
 fi
