@@ -12,7 +12,7 @@ USERNAME=
 CREDFILE=
 
 
-KAFKA_HEAP_OPTS="-Xmx6G -Xms6G"
+KAFKA_HEAP_OPTS="-Xmx6G -Xms2G"
 KAFKA_VERSION=0.11.0.1
 KAFKA_PACKAGE_DIR=/home/ec2-user/kafka-connect-splunk
 PROC_MONITOR=/home/ec2-user/proc_monitor
@@ -20,7 +20,6 @@ KAKFA_BUILD_DIR=/tmp/kafka-connect-splunk-build/
 KAFKA_INSTALL_PACKAGE=kafka_2.11-${KAFKA_VERSION}.tgz
 KAFKA_PACKAGE_URL=http://mirrors.ibiblio.org/apache/kafka/${KAFKA_VERSION}/${KAFKA_INSTALL_PACKAGE}
 curdir=`pwd`
-#echo ${curdir}
 
 execute_remote_cmd() {
     ip="$1"
@@ -53,7 +52,6 @@ read_user_cred() {
             fi
         fi
     done < ${CRED}
-    # print_msg "Use username=$USERNAME, CREDFILE=$CREDFILE to do deployment"
 }
 
 #get list of bootstrap servers
@@ -128,9 +126,8 @@ deploy_kafka_package() {
          print_msg "Deploy kafka-connect package to ${pub_ip}"
          
          rsync -raz -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=quiet -i $CREDFILE" --exclude=macos ${curdir}/kafka-connect-splunk/kafka-connect-splunk $USERNAME@$pub_ip:~/
-         execute_remote_cmd "${pub_ip}" "export KAFKA_HEAP_OPTS='-Xmx6G -Xms2G'"
-         execute_remote_cmd "${pub_ip}" "sudo wget -q --no-check-certificate --no-cookies --header \"Cookie: oraclelicense=accept-securebackup-cookie\" http://download.oracle.com/otn-pub/java/jdk/8u141-b15/336fa29ff2bb4ef291e347e091f7f4a7/jdk-8u141-linux-x64.rpm"
-         execute_remote_cmd "${pub_ip}" "sudo yum install -y jdk-8u141-linux-x64.rpm"
+         #execute_remote_cmd "${pub_ip}" "sudo wget -q --no-check-certificate --no-cookies --header \"Cookie: oraclelicense=accept-securebackup-cookie\" http://download.oracle.com/otn-pub/java/jdk/8u141-b15/336fa29ff2bb4ef291e347e091f7f4a7/jdk-8u141-linux-x64.rpm"
+         #execute_remote_cmd "${pub_ip}" "sudo yum install -y jdk-8u141-linux-x64.rpm"
 
      done
 }
@@ -209,6 +206,7 @@ restart_kafka_connect_cluster() {
 
 
 clean_kafka_connect_cluster() {
+
     if [[ "$1" == "" ]]; then
         for ip in `cat ${CONNECTLAB} | grep -v \# | awk -F\| '{print $1}'`
         do
@@ -217,7 +215,7 @@ clean_kafka_connect_cluster() {
             fi
 
             print_msg "Cleaning kafka connect on ${ip}"
-            execute_remote_cmd "${ip}" "rm -rf /home/ec2-user/kafka-connect-splunk/*"
+            execute_remote_cmd "${ip}" "rm -rf /home/ec2-user/kafka-connect-splunk"
         done
     else
         print_msg "Kafka Connect doesn't exist on $1"
@@ -290,7 +288,7 @@ ips=
 topic=
 #topics1=
 
-while getopts "hsropdlnci:" OPTION
+while getopts "hsropdlntci:" OPTION
 do
     case $OPTION in
         h)
