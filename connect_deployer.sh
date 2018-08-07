@@ -13,11 +13,11 @@ CREDFILE=
 
 
 KAFKA_HEAP_OPTS="-Xmx6G -Xms2G"
-KAFKA_VERSION=0.11.0.1
-KAFKA_PACKAGE_DIR=/home/ec2-user/kafka-connect-splunk
+KAFKA_VERSION=0.11.0.2
+KAFKA_PACKAGE_DIR=/home/ec2-user/splunk-kafka-connect
 PROC_MONITOR=/home/ec2-user/proc_monitor
 KAKFA_BUILD_DIR=/tmp/kafka-connect-splunk-build/
-KAFKA_INSTALL_PACKAGE=kafka_2.11-${KAFKA_VERSION}.tgz
+KAFKA_INSTALL_PACKAGE=kafka_2.11-${KAFKA_VERSION}-LAR.tgz
 KAFKA_PACKAGE_URL=http://mirrors.ibiblio.org/apache/kafka/${KAFKA_VERSION}/${KAFKA_INSTALL_PACKAGE}
 curdir=`pwd`
 
@@ -84,11 +84,11 @@ configure_connect_settings() {
     # value.converter.schemas.enable=false
 
     print_msg ${server_list}
-    sed -i "" "s#bootstrap.servers=.*#bootstrap.servers=${k_server_list}#g" "${curdir}/kafka-connect-splunk/kafka-connect-splunk/config/connect-distributed.properties"
-    sed -i "" "s#rest.advertised.host.name=.*#\#rest.advertised.host.name=#g" "${curdir}/kafka-connect-splunk/kafka-connect-splunk/config/connect-distributed.properties"
-    sed -i "" "s#rest.host.name=.*#\#rest.host.name=#g" "${curdir}/kafka-connect-splunk/kafka-connect-splunk/config/connect-distributed.properties"
-    sed -i "" "s#status.storage.partitions=.*#status.storage.partitions=5#g" "${curdir}/kafka-connect-splunk/kafka-connect-splunk/config/connect-distributed.properties"
-    sed -i "" "s#offset.storage.partitions=.*#offset.storage.partitions=25#g" "${curdir}/kafka-connect-splunk/kafka-connect-splunk/config/connect-distributed.properties"
+    sed -i "" "s#bootstrap.servers=.*#bootstrap.servers=${k_server_list}#g" "${curdir}/kafka-connect-splunk/splunk-kafka-connect/config/connect-distributed.properties"
+    sed -i "" "s#rest.advertised.host.name=.*#\#rest.advertised.host.name=#g" "${curdir}/kafka-connect-splunk/splunk-kafka-connect/config/connect-distributed.properties"
+    sed -i "" "s#rest.host.name=.*#\#rest.host.name=#g" "${curdir}/kafka-connect-splunk/splunk-kafka-connect/config/connect-distributed.properties"
+    sed -i "" "s#status.storage.partitions=.*#status.storage.partitions=5#g" "${curdir}/kafka-connect-splunk/splunk-kafka-connect/config/connect-distributed.properties"
+    sed -i "" "s#offset.storage.partitions=.*#offset.storage.partitions=25#g" "${curdir}/kafka-connect-splunk/splunk-kafka-connect/config/connect-distributed.properties"
   #  sed -i "" "s#key.converter.schemas.enable=true#key.converter.schemas.enable=false#g" "${KAFKA_PACKAGE_DIR}/config/connect-distributed.properties"
   #  sed -i "" "s#value.converter.schemas.enable=true#value.converter.schemas.enable=false#g" "${KAFKA_PACKAGE_DIR}/config/connect-distributed.properties"
     
@@ -108,7 +108,8 @@ deploy_kafka_package() {
     #curdir = 'pwd'/kafka-connect-splunk
     
     cd ${curdir}/kafka-connect-splunk
-    tar xzf ${curdir}/kafka-connect-splunk/kafka-connect-splunk.tar.gz
+
+    tar xzf ${curdir}/kafka-connect-splunk/splunk-kafka-connect-v1.0.0-LAR.tar.gz
     cd ${curdir}
 
     k_server_list=`get_kafka_server_list`
@@ -125,7 +126,7 @@ deploy_kafka_package() {
 
          print_msg "Deploy kafka-connect package to ${pub_ip}"
          
-         rsync -raz -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=quiet -i $CREDFILE" --exclude=macos ${curdir}/kafka-connect-splunk/kafka-connect-splunk $USERNAME@$pub_ip:~/
+         rsync -raz -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=quiet -i $CREDFILE" --exclude=macos ${curdir}/kafka-connect-splunk/splunk-kafka-connect $USERNAME@$pub_ip:~/
          #execute_remote_cmd "${pub_ip}" "sudo wget -q --no-check-certificate --no-cookies --header \"Cookie: oraclelicense=accept-securebackup-cookie\" http://download.oracle.com/otn-pub/java/jdk/8u141-b15/336fa29ff2bb4ef291e347e091f7f4a7/jdk-8u141-linux-x64.rpm"
          #execute_remote_cmd "${pub_ip}" "sudo yum install -y jdk-8u141-linux-x64.rpm"
 
@@ -215,7 +216,7 @@ clean_kafka_connect_cluster() {
             fi
 
             print_msg "Cleaning kafka connect on ${ip}"
-            execute_remote_cmd "${ip}" "rm -rf /home/ec2-user/kafka-connect-splunk"
+            execute_remote_cmd "${ip}" "rm -rf /home/ec2-user/splunk-kafka-connect"
         done
     else
         print_msg "Kafka Connect doesn't exist on $1"
