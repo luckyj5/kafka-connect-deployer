@@ -13,7 +13,7 @@ CREDFILE=
 
 
 KAFKA_HEAP_OPTS="-Xmx6G -Xms2G"
-KAFKA_VERSION=0.11.0.2
+KAFKA_VERSION=2.0.0
 KAFKA_PACKAGE_DIR=/home/ec2-user/splunk-kafka-connect
 PROC_MONITOR=/home/ec2-user/proc_monitor
 KAKFA_BUILD_DIR=/tmp/kafka-connect-splunk-build/
